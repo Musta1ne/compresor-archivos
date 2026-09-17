@@ -65,7 +65,7 @@ export async function compressVideo(
   let lastProgress = 0
   let attempt = 0
   const reportProgress = (progress: number) => {
-    if (!encoding || signal.aborted || !Number.isFinite(progress)) return
+    if (!encoding || signal.aborted || !Number.isFinite(progress) || progress < 0 || progress > 1) return
     const scaled = attempt === 0 ? progress * 0.85 : 0.85 + progress * 0.14
     lastProgress = Math.max(lastProgress, Math.min(0.99, Math.max(0, scaled)))
     onUpdate({ phase: 'compressing', progress: lastProgress, message: attempt === 0 ? 'Comprimiendo en tu dispositivo…' : 'Ajustando el bitrate para respetar el tamaño objetivo…' })
