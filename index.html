@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="theme-color" content="#f9f9f6" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (() => {
+        let theme
+        try { theme = localStorage.getItem('ligero-tema') } catch { theme = null }
+        if (theme !== 'light' && theme !== 'dark') theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = theme
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#161b19' : '#f9f9f6')
+      })()
+    </script>
     <meta name="description" content="Comprime videos en tu navegador. Privado, gratis y sin subir archivos a un servidor." />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ligero — Compresor de video privado</title>

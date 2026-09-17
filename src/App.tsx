@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowRight, Check, FileVideo, HardDrive, Info, LoaderCircle, LockKeyhole, Minimize2, ShieldCheck, SlidersHorizontal, Upload, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRight, Check, FileVideo, HardDrive, Info, LoaderCircle, LockKeyhole, Minimize2, Moon, ShieldCheck, SlidersHorizontal, Sun, Upload, X } from 'lucide-react'
 import { compressVideo, MAX_INPUT_BYTES } from './compressor'
-import type { CompressionResult, CompressionUpdate, Resolution } from './compressor'
+import type { CompressionResult, CompressionUpdate } from './compressor'
 
 const size = (bytes: number) => `${(bytes / 1_000_000).toLocaleString('es', { maximumFractionDigits: 2 })} MB`
+const THEME_KEY = 'ligero-tema'
+
+const PRESETS = [
+  { name: 'WhatsApp', value: 180 },
+  { name: 'Discord gratis', value: 20 },
+  { name: 'Nitro Basic', value: 50 },
+  { name: 'Gmail', value: 25 },
+]
 
 function App() {
   const [file, setFile] = useState<File | null>(null)
   const [target, setTarget] = useState('100')
-  const [resolution, setResolution] = useState<Resolution>('720')
+  const [themePreference, setThemePreference] = useState<'light' | 'dark' | null>(() => {
+    try {
+      const stored = localStorage.getItem(THEME_KEY)
+      return stored === 'light' || stored === 'dark' ? stored : null
+    } catch { return null }
+  })
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const theme = themePreference ?? (systemDark ? 'dark' : 'light')
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -22,6 +37,22 @@ function App() {
   useEffect(() => () => controller.current?.abort(), [])
   useEffect(() => () => { if (previewURL) URL.revokeObjectURL(previewURL) }, [previewURL])
   useEffect(() => () => { if (downloadURL) URL.revokeObjectURL(downloadURL) }, [downloadURL])
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#161b19' : '#f9f9f6')
+  }, [theme])
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const onSystem = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    media.addEventListener('change', onSystem)
+    return () => media.removeEventListener('change', onSystem)
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setThemePreference(next)
+    try { localStorage.setItem(THEME_KEY, next) } catch { return }
+  }
 
   function selectFiles(files: FileList | null) {
     if (controller.current || !files?.length) return
@@ -48,7 +79,7 @@ function App() {
     setError('')
     clearResult()
     try {
-      const output = await compressVideo(file, { targetMB: Number(target), resolution }, (value) => {
+      const output = await compressVideo(file, { targetMB: Number(target) }, (value) => {
         if (controller.current === current) setUpdate(value)
       }, current.signal)
       if (controller.current === current) {
@@ -79,7 +110,7 @@ function App() {
     <div className="app-shell">
       <header className="header">
         <a className="brand" href="#"><span className="brand-icon"><Minimize2 size={22} /></span> ligero<span className="brand-dot">.</span></a>
-        <nav aria-label="Navegación principal"><a href="#como-funciona">Cómo funciona <ArrowRight size={14} /></a><span className="privacy-pill"><span /> 100 % local</span></nav>
+        <nav aria-label="Navegación principal"><a href="#como-funciona">Cómo funciona <ArrowRight size={14} /></a><button type="button" className="theme-toggle" aria-label="Modo oscuro" aria-pressed={theme === 'dark'} onClick={toggleTheme}>{theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}</button><span className="privacy-pill"><span /> 100 % local</span></nav>
       </header>
 
       <main>
@@ -113,12 +144,10 @@ function App() {
           <div className="settings-panel">
             <div className="section-title"><span className="step">02</span><h2>Hazlo más ligero</h2><SlidersHorizontal className="settings-icon" size={17} /></div>
             <fieldset disabled={busy}>
-              <label className="field-label" htmlFor="target">Tamaño objetivo <span>Aproximado</span></label>
+              <label className="field-label" htmlFor="target">Tamaño objetivo <span>Presupuesto</span></label>
               <div className="size-input"><input id="target" type="number" min="0.1" step="0.1" value={target} onChange={(event) => { setTarget(event.target.value); clearResult() }} /><span>MB</span></div>
-              <div className="presets">{[25, 50, 100].map((value) => <button key={value} className={Number(target) === value ? 'active' : ''} aria-pressed={Number(target) === value} onClick={() => { setTarget(String(value)); clearResult() }}>{value} MB</button>)}</div>
-              <p className="field-hint">El bitrate se calcula automáticamente según la duración.</p>
-              <label className="field-label resolution-label" htmlFor="resolution">Resolución de salida</label>
-              <select id="resolution" value={resolution} onChange={(event) => { setResolution(event.target.value as Resolution); clearResult() }}><option value="720">720p · Ideal para compartir</option><option value="1080">1080p · Más detalle</option><option value="original">Original · Mantener resolución</option></select>
+              <div className="presets">{PRESETS.map((preset) => <button key={preset.name} type="button" className={Number(target) === preset.value ? 'active' : ''} aria-pressed={Number(target) === preset.value} onClick={() => { setTarget(String(preset.value)); clearResult() }}><span className="preset-name">{preset.name}</span><strong>{preset.value} MB</strong></button>)}</div>
+              <p className="field-hint">Presupuesto objetivo, no un tamaño garantizado: el bitrate se calcula según la duración y al terminar verás el tamaño exacto.</p>
               <div className="output-format"><span>Formato de salida</span><strong>MP4 <span>H.264 + AAC</span></strong></div>
             </fieldset>
             {busy ? <button className="primary-button cancel" onClick={cancel}><X size={17} /> Cancelar compresión</button> : <button className="primary-button" disabled={!file || !Number.isFinite(Number(target)) || Number(target) <= 0} onClick={() => void start()}><Minimize2 size={18} /> {result ? 'Comprimir de nuevo' : 'Comprimir video'}<ArrowRight size={17} /></button>}
@@ -128,12 +157,18 @@ function App() {
 
         {error && <div className="error-message" role="alert"><Info size={20} /><span>{error}</span></div>}
         {busy && update && <section className="status-card" aria-live="polite"><div className="status-heading"><LoaderCircle className="spin" size={21} /><strong>{update.message}</strong><span>{update.phase === 'compressing' || update.phase === 'finalizing' ? `${percent} %` : 'Un momento…'}</span></div><div className={`progress-track ${update.phase === 'loading' || update.phase === 'analyzing' ? 'indeterminate' : ''}`} role="progressbar" aria-label="Progreso de compresión" aria-valuemin={0} aria-valuemax={100} aria-valuenow={update.phase === 'compressing' || update.phase === 'finalizing' ? percent : undefined}><div style={{ width: `${percent}%` }} /></div><p>Los videos largos pueden tardar varios minutos. No cierres esta pestaña.</p></section>}
-        {result && file && <section className="result-card" aria-live="polite"><div className="result-heading"><span className="success-icon"><Check size={24} /></span><div><h2>Listo para compartir.</h2><p>{size(file.size)} → <strong>{size(result.blob.size)}</strong>{savings > 0 ? ` · ${savings} % menos peso` : ' · Este video no se redujo; prueba un objetivo menor.'}</p></div></div><a className="download-button" href={downloadURL} download={`${file.name.replace(/\.[^.]+$/, '')}-comprimido.mp4`}><ArrowDownToLine size={18} /> Descargar MP4</a>{result.blob.size > Number(target) * 1_000_000 && <p className="result-warning">El resultado supera el objetivo. El tamaño es aproximado: prueba con menos MB antes de enviarlo.</p>}</section>}
+        {result && file && <section className="result-card" aria-live="polite"><div className="result-heading"><span className="success-icon"><Check size={24} /></span><div><h2>Listo para compartir.</h2><p>{size(file.size)} → <strong>{size(result.blob.size)}</strong> · {result.blob.size.toLocaleString('es')} bytes{savings > 0 ? ` · ${savings} % menos peso` : ' · Este video no se redujo; prueba un objetivo menor.'}</p></div></div><a className="download-button" href={downloadURL} download={`${file.name.replace(/\.[^.]+$/, '')}-comprimido.mp4`}><ArrowDownToLine size={18} /> Descargar MP4</a>{result.blob.size > Number(target) * 1_000_000 && <p className="result-warning">El resultado supera el presupuesto objetivo. Comprueba el tamaño exacto antes de enviarlo o prueba con menos MB.</p>}</section>}
 
         <div className="under-workspace"><Info size={15} /><span>Menos tamaño, un poco menos de calidad. Tú eliges el equilibrio.</span><span className="engine-label">POWERED BY FFMPEG.WASM</span></div>
 
-        <section className="how-section" id="como-funciona"><div className="how-heading"><span className="eyebrow">ASÍ DE SIMPLE</span><h2>De pesado a compartido.</h2></div><div className="how-grid"><article><span>01 /</span><h3>Elige tu video</h3><p>Arrástralo o búscalo en tu dispositivo. No se sube a ningún servidor.</p></article><article><span>02 /</span><h3>Define el tamaño</h3><p>Elige los MB y la resolución. Nosotros calculamos el bitrate del video.</p></article><article><span>03 /</span><h3>Descarga y comparte</h3><p>Tu MP4 está listo para llevarlo a donde quieras. Sin marcas de agua.</p></article></div></section>
-        <section className="faq" aria-label="Preguntas frecuentes"><details><summary>¿Mis videos son realmente privados?</summary><p>Sí. FFmpeg se ejecuta en un Web Worker mediante WebAssembly. Solo se descargan los archivos de la aplicación y su motor; el video nunca se envía a un servidor.</p></details><details><summary>¿Por qué tarda y qué límites tiene?</summary><p>La velocidad depende de tu dispositivo. Este motor usa un solo hilo para mejorar la compatibilidad, y puede ser más lento que una aplicación nativa. El límite de entrada es 500 MB; en móviles, incluso archivos menores pueden superar la memoria disponible. Puedes cancelar en cualquier momento.</p></details><details><summary>¿El archivo tendrá exactamente el tamaño elegido?</summary><p>No. Reservamos un 5 % para el contenedor y calculamos el bitrate según la duración. El resultado depende del contenido. Comprueba el peso final y el límite vigente de tu aplicación de mensajería antes de enviarlo. Si el original ya pesa menos, no intentamos rellenar el tamaño objetivo.</p></details></section>
+        <section className="how-section" id="como-funciona"><div className="how-heading"><span className="eyebrow">ASÍ DE SIMPLE</span><h2>De pesado a compartido.</h2></div><div className="how-grid"><article><span>01 /</span><h3>Elige tu video</h3><p>Arrástralo o búscalo en tu dispositivo. No se sube a ningún servidor.</p></article><article><span>02 /</span><h3>Define el objetivo</h3><p>Elige un presupuesto en MB. Calculamos el bitrate y ajustamos la resolución, con un máximo de 720p.</p></article><article><span>03 /</span><h3>Descarga y comparte</h3><p>Tu MP4 está listo para llevarlo a donde quieras. Sin marcas de agua.</p></article></div></section>
+        <section className="faq" aria-label="Preguntas frecuentes">
+          <details><summary>¿Mis videos son realmente privados?</summary><p>Sí. FFmpeg se ejecuta en tu navegador mediante WebAssembly. Solo se descargan los archivos de la aplicación y su motor; el video nunca se envía a un servidor. El motor se reutiliza entre trabajos de la misma sesión y los archivos temporales se liberan al terminar cada compresión.</p></details>
+          <details><summary>¿Cómo se calcula el tamaño final?</summary><p>Reservamos un 2 % para el contenedor y sumamos una sobrecarga proporcional a la duración; detectamos si el video tiene audio y repartimos el presupuesto entre video y audio. Hacemos una sola pasada rápida y solo reintentamos si el resultado supera el límite. La resolución se ajusta automáticamente, con un máximo de 720p, mediante un motor de un solo hilo con el preset superfast.</p></details>
+          <details><summary>¿Qué límites tienen WhatsApp, Discord y Gmail?</summary><p>WhatsApp: 180 MB es un objetivo conservador elegido para esta herramienta, no un límite oficial. Discord gratis permite 20 MB y Nitro Basic 50 MB, según la FAQ oficial actualizada en agosto de 2026. Gmail personal permite 25 MB en total entre todos los adjuntos: reduce el objetivo si añades otros archivos; por encima del límite, Gmail utiliza un enlace de Google Drive. Las cuentas de trabajo o estudios dependen de su administrador. Comprueba los límites vigentes en la <a className="faq-link" href="https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ" target="_blank" rel="noopener noreferrer">FAQ de adjuntos de Discord</a> y en la <a className="faq-link" href="https://support.google.com/mail/answer/6584?hl=en" target="_blank" rel="noopener noreferrer">ayuda de Gmail</a> antes de enviar.</p></details>
+          <details><summary>¿Por qué tarda y qué límites tiene?</summary><p>El motor usa un único hilo con el preset superfast para priorizar la compatibilidad; la velocidad real depende de tu dispositivo, tu navegador y el contenido del video, así que no prometemos tiempos concretos. El límite de entrada es 500 MB; en móviles, incluso archivos menores pueden superar la memoria disponible. Puedes cancelar en cualquier momento.</p></details>
+          <details><summary>¿El archivo tendrá exactamente el tamaño elegido?</summary><p>No. El objetivo es un presupuesto aproximado y el resultado depende del contenido. Comprueba el tamaño final exacto, mostrado en bytes al terminar, y los límites vigentes de tu aplicación antes de enviarlo. Si el original ya pesa menos, no intentamos rellenar el tamaño objetivo.</p></details>
+        </section>
       </main>
       <footer><a className="brand footer-brand" href="#">ligero.</a><span>Un poco menos de peso. Un poco más de libertad.</span><span><LockKeyhole size={13} /> Sin anuncios. Sin subidas.</span></footer>
     </div>
