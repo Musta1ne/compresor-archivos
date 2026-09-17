@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowRight, Check, FileVideo, HardDrive, Info, LoaderCircle, LockKeyhole, Minimize2, Moon, ShieldCheck, SlidersHorizontal, Sun, Upload, X } from 'lucide-react'
-import { compressVideo, MAX_INPUT_BYTES } from './compressor'
+import { compressVideo, MAX_INPUT_BYTES, supportsMultithreading } from './compressor'
 import type { CompressionResult, CompressionUpdate } from './compressor'
 
 const size = (bytes: number) => `${(bytes / 1_000_000).toLocaleString('es', { maximumFractionDigits: 2 })} MB`
 const THEME_KEY = 'ligero-tema'
+const FAST_MODE_KEY = 'ligero-modo-rapido'
+const multithreadingSupported = supportsMultithreading()
 
 const PRESETS = [
   { name: 'WhatsApp', value: 180 },
@@ -24,6 +26,9 @@ function App() {
   })
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const theme = themePreference ?? (systemDark ? 'dark' : 'light')
+  const [fastMode, setFastMode] = useState(() => {
+    try { return localStorage.getItem(FAST_MODE_KEY) === 'true' } catch { return false }
+  })
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -41,6 +46,9 @@ function App() {
     document.documentElement.dataset.theme = theme
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#161b19' : '#f9f9f6')
   }, [theme])
+  useEffect(() => {
+    try { localStorage.setItem(FAST_MODE_KEY, String(fastMode)) } catch { return }
+  }, [fastMode])
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const onSystem = (event: MediaQueryListEvent) => setSystemDark(event.matches)
@@ -79,7 +87,7 @@ function App() {
     setError('')
     clearResult()
     try {
-      const output = await compressVideo(file, { targetMB: Number(target) }, (value) => {
+      const output = await compressVideo(file, { targetMB: Number(target), fastMode: fastMode && multithreadingSupported }, (value) => {
         if (controller.current === current) setUpdate(value)
       }, current.signal)
       if (controller.current === current) {
@@ -149,6 +157,11 @@ function App() {
               <div className="presets">{PRESETS.map((preset) => <button key={preset.name} type="button" className={Number(target) === preset.value ? 'active' : ''} aria-pressed={Number(target) === preset.value} onClick={() => { setTarget(String(preset.value)); clearResult() }}><span className="preset-name">{preset.name}</span><strong>{preset.value} MB</strong></button>)}</div>
               <p className="field-hint">Presupuesto objetivo, no un tamaño garantizado: el bitrate se calcula según la duración y al terminar verás el tamaño exacto.</p>
               <div className="output-format"><span>Formato de salida</span><strong>MP4 <span>H.264 + AAC</span></strong></div>
+              <div className="fast-mode">
+                <label htmlFor="fast-mode"><input id="fast-mode" type="checkbox" checked={fastMode && multithreadingSupported} disabled={!multithreadingSupported} aria-describedby={multithreadingSupported ? 'fast-mode-hint' : 'fast-mode-hint fast-mode-support'} onChange={(event) => { setFastMode(event.target.checked); clearResult() }} />Modo rápido</label>
+                <p id="fast-mode-hint">Usa más CPU y memoria RAM, no la GPU, con hasta 4 hilos. La mejora de rapidez depende de tu dispositivo.</p>
+                {!multithreadingSupported && <p id="fast-mode-support" className="fast-mode-support">Modo rápido no disponible: este navegador o página necesita aislamiento de origen cruzado y SharedArrayBuffer. Se usará un solo hilo.</p>}
+              </div>
             </fieldset>
             {busy ? <button className="primary-button cancel" onClick={cancel}><X size={17} /> Cancelar compresión</button> : <button className="primary-button" disabled={!file || !Number.isFinite(Number(target)) || Number(target) <= 0} onClick={() => void start()}><Minimize2 size={18} /> {result ? 'Comprimir de nuevo' : 'Comprimir video'}<ArrowRight size={17} /></button>}
             <p className="button-caption">{file ? 'Mantén esta pestaña abierta durante el proceso.' : 'Selecciona un video para comenzar.'}</p>
@@ -163,10 +176,10 @@ function App() {
 
         <section className="how-section" id="como-funciona"><div className="how-heading"><span className="eyebrow">ASÍ DE SIMPLE</span><h2>De pesado a compartido.</h2></div><div className="how-grid"><article><span>01 /</span><h3>Elige tu video</h3><p>Arrástralo o búscalo en tu dispositivo. No se sube a ningún servidor.</p></article><article><span>02 /</span><h3>Define el objetivo</h3><p>Elige un presupuesto en MB. Calculamos el bitrate y ajustamos la resolución, con un máximo de 720p.</p></article><article><span>03 /</span><h3>Descarga y comparte</h3><p>Tu MP4 está listo para llevarlo a donde quieras. Sin marcas de agua.</p></article></div></section>
         <section className="faq" aria-label="Preguntas frecuentes">
-          <details><summary>¿Mis videos son realmente privados?</summary><p>Sí. FFmpeg se ejecuta en tu navegador mediante WebAssembly. Solo se descargan los archivos de la aplicación y su motor; el video nunca se envía a un servidor. El motor se reutiliza entre trabajos de la misma sesión y los archivos temporales se liberan al terminar cada compresión.</p></details>
-          <details><summary>¿Cómo se calcula el tamaño final?</summary><p>Reservamos un 2 % para el contenedor y sumamos una sobrecarga proporcional a la duración; detectamos si el video tiene audio y repartimos el presupuesto entre video y audio. Hacemos una sola pasada rápida y solo reintentamos si el resultado supera el límite. La resolución se ajusta automáticamente, con un máximo de 720p, mediante un motor de un solo hilo con el preset superfast.</p></details>
+          <details><summary>¿Mis videos son realmente privados?</summary><p>Sí. FFmpeg se ejecuta en tu navegador mediante WebAssembly. Solo se descargan los archivos de la aplicación y su motor; el video nunca se envía a un servidor. Solo se carga el motor del modo elegido al comprimir y se reutiliza entre trabajos de la misma sesión. Si cambias de modo, al iniciar el próximo trabajo se libera el motor anterior y se carga el nuevo. Los archivos temporales se liberan al terminar cada compresión.</p></details>
+          <details><summary>¿Cómo se calcula el tamaño final?</summary><p>Reservamos un 2 % para el contenedor y sumamos una sobrecarga proporcional a la duración; detectamos si el video tiene audio y repartimos el presupuesto entre video y audio. Hacemos una sola pasada rápida y solo reintentamos si el resultado supera el límite. La resolución se ajusta automáticamente, con un máximo de 720p, con el preset superfast.</p></details>
           <details><summary>¿Qué límites tienen WhatsApp, Discord y Gmail?</summary><p>WhatsApp: 180 MB es un objetivo conservador elegido para esta herramienta, no un límite oficial. Discord gratis permite 20 MB y Nitro Basic 50 MB, según la FAQ oficial actualizada en agosto de 2026. Gmail personal permite 25 MB en total entre todos los adjuntos: reduce el objetivo si añades otros archivos; por encima del límite, Gmail utiliza un enlace de Google Drive. Las cuentas de trabajo o estudios dependen de su administrador. Comprueba los límites vigentes en la <a className="faq-link" href="https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ" target="_blank" rel="noopener noreferrer">FAQ de adjuntos de Discord</a> y en la <a className="faq-link" href="https://support.google.com/mail/answer/6584?hl=en" target="_blank" rel="noopener noreferrer">ayuda de Gmail</a> antes de enviar.</p></details>
-          <details><summary>¿Por qué tarda y qué límites tiene?</summary><p>El motor usa un único hilo con el preset superfast para priorizar la compatibilidad; la velocidad real depende de tu dispositivo, tu navegador y el contenido del video, así que no prometemos tiempos concretos. El límite de entrada es 500 MB; en móviles, incluso archivos menores pueden superar la memoria disponible. Puedes cancelar en cualquier momento.</p></details>
+          <details><summary>¿Por qué tarda y qué límites tiene?</summary><p>Por defecto, el motor usa un solo hilo para priorizar la compatibilidad. El modo rápido permite hasta 4 hilos en navegadores compatibles, usando más CPU y memoria RAM, no la GPU. Ambos modos usan el preset superfast; la velocidad real depende de tu dispositivo, tu navegador y el contenido del video, así que no prometemos tiempos concretos. El límite de entrada es 500 MB; en móviles, incluso archivos menores pueden superar la memoria disponible. Puedes cancelar en cualquier momento.</p></details>
           <details><summary>¿El archivo tendrá exactamente el tamaño elegido?</summary><p>No. El objetivo es un presupuesto aproximado y el resultado depende del contenido. Comprueba el tamaño final exacto, mostrado en bytes al terminar, y los límites vigentes de tu aplicación antes de enviarlo. Si el original ya pesa menos, no intentamos rellenar el tamaño objetivo.</p></details>
         </section>
       </main>
