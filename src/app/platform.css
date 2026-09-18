@@ -1,0 +1,48 @@
+.platform-shell { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
+.platform-shell > main { flex: 1; min-width: 0; }
+.platform-header { gap: 20px; }
+.platform-header .brand { letter-spacing: -1.2px; font-size: clamp(22px, 3vw, 29px); }
+.brand-period, .brand-suffix { color: #ad452b; }
+.platform-header .brand-icon { flex-shrink: 0; background: #ad452b; }
+.platform-header nav { gap: 18px; }
+.platform-header .catalog-back { min-height: 44px; font-size: 13px; }
+.skip-link { position: fixed; top: -100px; left: 16px; z-index: 10; padding: 12px 18px; background: #fff; color: #262b2e; border: 2px solid #ad452b; border-radius: 6px; }
+.skip-link:focus { top: 12px; }
+.catalog-intro { padding: 78px 0 60px; }
+.catalog-intro h1 > span { color: #ad452b; }
+.catalog-intro > p, .catalog-heading > span, .catalog-note p, .route-message p, .platform-footer { color: #626b60; }
+.platform-shell .eyebrow { color: #626b60; }
+.catalog-jump { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; margin-top: 20px; padding: 12px 20px; border: 1px solid #ad452b; border-radius: 8px; background: #ad452b; color: #fff; font-size: 14px; font-weight: 600; }
+.catalog-jump:hover { background: #8e3520; }
+.catalog-section { scroll-margin-top: 24px; padding-bottom: 40px; }
+.catalog-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 24px; }
+.catalog-heading h2 { font-size: 24px; margin-top: 8px; }
+.catalog-heading > span { font-size: 13px; }
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 22px; list-style: none; margin: 0; padding: 0; }
+.tool-grid li { min-width: 0; }
+.tool-card { display: flex; flex-direction: column; height: 100%; min-height: 290px; padding: 26px; background: #fff; border: 1px solid #d9ded3; border-radius: 16px; box-shadow: 0 6px 25px #252a2508; transition: border-color .18s, box-shadow .18s; }
+.tool-card:hover { border-color: #ad452b; box-shadow: 0 8px 28px #252a2515; }
+.tool-card-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.tool-icon { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 13px; background: #fbeee7; color: #ad452b; }
+.tool-category { font-size: 12px; color: #536348; border: 1px solid #d9e1d1; background: #f1f5ec; padding: 5px 10px; border-radius: 20px; }
+.tool-card h3 { font-size: 21px; margin: 22px 0 10px; }
+.tool-card p { font-size: 14px; line-height: 1.75; color: #626b60; margin: 0 0 24px; }
+.tool-card-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; font-size: 14px; font-weight: 600; color: #ad452b; }
+.catalog-note { padding: 28px 0 42px; border-top: 1px solid #d9ded3; }
+.catalog-note h2 { font-size: 18px; }
+.catalog-note p { max-width: 700px; font-size: 14px; line-height: 1.8; margin-bottom: 0; }
+.route-message { padding: 70px 0; max-width: 720px; }
+.route-message h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -1.5px; }
+.route-message p { line-height: 1.8; }
+.platform-footer { font-size: 12px; }
+.platform-footer a { font-size: 18px; font-weight: 750; color: #626b60; min-height: 44px; display: inline-flex; align-items: center; }
+[data-theme='dark'] .brand-period, [data-theme='dark'] .brand-suffix, [data-theme='dark'] .catalog-intro h1 > span, [data-theme='dark'] .tool-card-action { color: #ffad91; }
+[data-theme='dark'] .tool-card { background: #202722; border-color: #556251; }
+[data-theme='dark'] .tool-card:hover { border-color: #ffad91; }
+[data-theme='dark'] .tool-icon { background: #422e24; color: #ffad91; }
+[data-theme='dark'] .tool-category { background: #2c3827; border-color: #536447; color: #c7dbb7; }
+[data-theme='dark'] .catalog-note { border-color: #414b42; }
+[data-theme='dark'] .catalog-jump { background: #f2997d; border-color: #ffad91; color: #291810; }
+[data-theme='dark'] .catalog-jump:hover { background: #ffb398; }
+[data-theme='dark'] .catalog-intro > p, [data-theme='dark'] .catalog-heading > span, [data-theme='dark'] .tool-card p, [data-theme='dark'] .catalog-note p, [data-theme='dark'] .route-message p, [data-theme='dark'] .platform-footer, [data-theme='dark'] .platform-footer a, [data-theme='dark'] .platform-shell .eyebrow { color: #b9c4b1; }
+@media (max-width: 620px) { .platform-header { gap: 8px; } .platform-header nav { margin-left: auto; gap: 12px; } .catalog-intro { padding: 48px 0 42px; } .catalog-intro h1 { font-size: 37px; } .catalog-intro > p { font-size: 14px; } .catalog-heading h2 { font-size: 22px; } .tool-card { padding: 22px; } }

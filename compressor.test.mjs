@@ -7,21 +7,24 @@ import ts from 'typescript'
 const source = readFileSync(new URL('./src/compressor.ts', import.meta.url), 'utf8')
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
 
-function harness(outputSizes = [1000, 1000]) {
+function harness(outputSizes = [1000, 1000], hooks = {}) {
   let instances = 0
   let executions = 0
+  const engines = []
   const exports = {}
   class FFmpeg {
     loaded = false
+    terminations = 0
+    deleted = []
     listeners = new Map()
-    constructor() { instances++ }
+    constructor() { instances++; engines.push(this) }
     on(event, callback) { this.listeners.set(event, callback) }
     off(event) { this.listeners.delete(event) }
     async load() { this.loaded = true }
     async writeFile() {}
-    async deleteFile() {}
+    async deleteFile(path) { this.deleted.push(path); await hooks.deleteFile?.(path) }
     async ffprobe() { return 0 }
-    terminate() { this.loaded = false }
+    terminate() { this.loaded = false; this.terminations++ }
     async exec() {
       executions++
       const progress = this.listeners.get('progress')
@@ -46,12 +49,12 @@ function harness(outputSizes = [1000, 1000]) {
       throw new Error(`Unexpected module: ${name}`)
     },
   })
-  const run = async () => {
+  const run = async (signal = new AbortController().signal) => {
     const updates = []
-    await exports.compressVideo({ size: 2_000_000 }, { targetMB: 1 }, (update) => updates.push(update), new AbortController().signal)
+    await exports.compressVideo({ size: 2_000_000 }, { targetMB: 1 }, (update) => updates.push(update), signal)
     return updates
   }
-  return { run, instances: () => instances }
+  return { run, dispose: exports.disposeIdleEngine, instances: () => instances, engines }
 }
 
 test('reused engine ignores invalid progress and continues advancing', async () => {
@@ -76,4 +79,65 @@ test('retry ignores sentinel progress before processing its frames', async () =>
   assert.equal(retry[4].progress, retry[3].progress)
   assert.equal(retry[5].progress, 0.99)
   assert.equal(updates.at(-1).progress, 1)
+})
+
+test('dispose idle engine repeatedly and on a fresh module instance', async () => {
+  const fresh = harness()
+  fresh.dispose()
+  fresh.dispose()
+  assert.equal(fresh.instances(), 0)
+  await fresh.run()
+  fresh.dispose()
+  fresh.dispose()
+  assert.equal(fresh.instances(), 1)
+  assert.equal(fresh.engines[0].terminations, 1)
+  assert.equal(fresh.engines[0].loaded, false)
+  assert.equal(fresh.engines[0].listeners.size, 0)
+  assert.deepEqual(fresh.engines[0].deleted, ['input', 'probe.json', 'output.mp4'])
+})
+
+test('compression after dispose loads a new engine instead of reusing', async () => {
+  const engine = harness([1000, 1000, 1000])
+  await engine.run()
+  engine.dispose()
+  const updates = await engine.run()
+  assert.equal(engine.instances(), 2)
+  assert.equal(updates[0].phase, 'loading')
+  assert.equal(engine.engines[0].terminations, 1)
+  assert.equal(engine.engines[1].terminations, 0)
+  await engine.run()
+  assert.equal(engine.instances(), 2)
+})
+
+test('cancel during load aborts and disposes without reusing the engine', async () => {
+  const engine = harness()
+  const controller = new AbortController()
+  const pending = engine.run(controller.signal)
+  controller.abort()
+  engine.dispose()
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(engine.instances(), 1)
+  assert.ok(engine.engines[0].terminations > 0)
+  assert.equal(engine.engines[0].listeners.size, 0)
+  await engine.run()
+  assert.equal(engine.instances(), 2)
+})
+
+test('cancel during temporary file cleanup cannot cache the engine afterwards', async () => {
+  const controller = new AbortController()
+  let engine
+  engine = harness([1000, 1000], {
+    deleteFile(path) {
+      if (path === 'input') {
+        controller.abort()
+        engine.dispose()
+      }
+    },
+  })
+  await assert.rejects(engine.run(controller.signal), { name: 'AbortError' })
+  assert.ok(engine.engines[0].terminations > 0)
+  assert.equal(engine.engines[0].listeners.size, 0)
+  engine.dispose()
+  await engine.run()
+  assert.equal(engine.instances(), 2)
 })

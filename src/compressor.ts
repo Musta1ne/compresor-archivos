@@ -20,6 +20,12 @@ export interface CompressionResult {
 export const MAX_INPUT_BYTES = 500_000_000
 let idleEngine: { engine: FFmpeg; fastMode: boolean } | undefined
 
+export function disposeIdleEngine() {
+  const idle = idleEngine
+  idleEngine = undefined
+  idle?.engine.terminate()
+}
+
 export function supportsMultithreading() {
   return globalThis.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined'
 }
